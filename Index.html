@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="id"><head><base target="_top"><meta charset="utf-8">
+<style>
+:root{--bg:#f4f6f5;--c:#fff;--t:#1d2b27;--m:#66756f;--p:#1f7a5c;--l:#dfe6e3;--e:#b3261e}
+@media(prefers-color-scheme:dark){:root{--bg:#121816;--c:#1b2420;--t:#e6eeea;--m:#93a39c;--p:#3fb98c;--l:#2c3832;--e:#ff8a80}}
+*{box-sizing:border-box}body{margin:0;font:15px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--t)}
+header{background:var(--p);color:#fff;padding:14px 16px}header b{font-size:17px}header small{display:block;opacity:.85}
+.w{max-width:860px;margin:0 auto;padding:12px}.card{background:var(--c);border:1px solid var(--l);border-radius:10px;padding:14px;margin-bottom:12px}
+nav{display:flex;gap:6px;overflow-x:auto;padding:10px 12px;max-width:860px;margin:0 auto}
+nav button{white-space:nowrap;border:1px solid var(--l);background:var(--c);color:var(--t);padding:7px 12px;border-radius:99px;cursor:pointer}
+nav button.on{background:var(--p);color:#fff;border-color:var(--p)}
+input,select,textarea{width:100%;padding:9px;margin:4px 0 10px;border:1px solid var(--l);border-radius:8px;background:var(--bg);color:var(--t);font:inherit}
+label{font-size:13px;color:var(--m)}button.b{background:var(--p);color:#fff;border:0;padding:9px 14px;border-radius:8px;cursor:pointer;font:inherit}
+button.s{background:none;border:1px solid var(--l);color:var(--t);padding:4px 9px;border-radius:6px;cursor:pointer;margin:2px}
+button.d{color:var(--e)}h3{margin:0 0 8px}.mut{color:var(--m)}.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.k{border:1px solid var(--l);border-radius:8px;padding:8px}.k b{display:block;font-size:18px}
+table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:6px;border-bottom:1px solid var(--l);text-align:left}
+.sc{overflow-x:auto}.tag{font-size:12px;padding:1px 7px;border-radius:99px;background:var(--l)}
+#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:8px;display:none;max-width:90%;z-index:9}
+#toast.e{background:var(--e)}.tabs{display:flex;gap:8px;margin-bottom:10px}.tabs button{flex:1}
+</style></head><body>
+<header><b>Portal Warga RT 03</b><small>Perumahan Puri Sava</small></header>
+<nav id="nav"></nav><div class="w" id="main"></div><div id="toast"></div>
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const rp=n=>'Rp '+Number(n||0).toLocaleString('id-ID');
+let T=sessionStorage.getItem('t'),ME=null,TAB='beranda',MODE='masuk',PER=new Date().toISOString().slice(0,7);
+function toast(m,e){const t=$('#toast');t.textContent=m;t.className=e?'e':'';t.style.display='block';setTimeout(()=>t.style.display='none',3500)}
+function call(a,p){return new Promise(r=>google.script.run
+  .withSuccessHandler(x=>{if(!x.ok&&x.auth&&ME){keluarLokal();toast(x.error,1)}r(x)})
+  .withFailureHandler(()=>r({ok:false,error:'Koneksi gagal.'})).api(T,a,p||{}))}
+async function must(a,p){const r=await call(a,p);if(!r.ok)throw new Error(r.error);return r.data}
+function keluarLokal(){T=null;ME=null;sessionStorage.removeItem('t');boot()}
+const tbl=(h,rows)=>'<div class=sc><table><tr>'+h.map(x=>'<th>'+x+'</th>').join('')+'</tr>'+(rows.join('')||'<tr><td colspan='+h.length+' class=mut>Belum ada data.</td></tr>')+'</table></div>';
+const td=v=>'<td>'+esc(v)+'</td>';
+
+/* ---- Autentikasi ---- */
+function authView(){
+ $('#nav').innerHTML='';
+ $('#main').innerHTML=`<div class=card><div class=tabs><button class="s" data-a=mode data-m=masuk>Masuk</button><button class="s" data-a=mode data-m=daftar>Daftar Warga</button></div>`+(MODE==='masuk'?
+ `<form data-f=login><label>Nomor HP</label><input name=hp inputmode=tel required autocomplete=username><label>Kata sandi</label><input name=sandi type=password required autocomplete=current-password><button class=b>Masuk</button></form>`:
+ `<form data-f=daftar><label>Nama lengkap</label><input name=nama required maxlength=60><div class=g><div><label>Blok</label><input name=blok required maxlength=10></div><div><label>No. rumah</label><input name=noRumah required maxlength=10></div></div><label>Nomor HP (untuk masuk)</label><input name=hp inputmode=tel required><label>Kata sandi (min. 8, huruf + angka)</label><input name=sandi type=password required minlength=8 autocomplete=new-password><button class=b>Kirim pendaftaran</button><p class=mut>Akun aktif setelah diverifikasi Ketua RT.</p></form>`)+`</div>`;
+}
+/* ---- Shell ---- */
+const TABS=()=>{const t=[['beranda','Beranda'],['iuran','Iuran Saya']];
+ if(ME.role==='KETUA')t.push(['verif','Verifikasi'],['warga','Warga']);
+ if(ME.role!=='WARGA')t.push(['uang','Keuangan']);
+ if(ME.role==='KETUA')t.push(['log','Log']);
+ t.push(['akun','Akun']);return t};
+function shell(){$('#nav').innerHTML=TABS().map(t=>`<button data-a=tab data-t=${t[0]} class="${t[0]===TAB?'on':''}">${t[1]}</button>`).join('');view()}
+async function view(){const m=$('#main');m.innerHTML='<p class=mut>Memuat…</p>';
+ try{m.innerHTML=await V[TAB]();$('#nav').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.t===TAB))}catch(e){m.innerHTML='<p class=mut>Gagal memuat: '+esc(e.message)+'</p>'}}
+
+const V={
+ async beranda(){const d=await must('pengumuman');
+  const f=ME.role==='KETUA'?`<div class=card><h3>Terbitkan pengumuman</h3><form data-f=pengumuman><input name=judul placeholder="Judul" required maxlength=100><textarea name=isi rows=3 placeholder="Isi pengumuman" required maxlength=1500></textarea><button class=b>Terbitkan</button></form></div>`:'';
+  return `<div class=card><b>Halo, ${esc(ME.nama)}</b><br><span class=mut>Blok ${esc(ME.blok)} / ${esc(ME.noRumah)} · <span class=tag>${esc(ME.role)}</span></span></div>`+f+
+   (d.map(x=>`<div class=card><b>${esc(x.judul)}</b><div class=mut>${esc(x.tanggal)} · ${esc(x.oleh)}</div><p style="white-space:pre-wrap">${esc(x.isi)}</p>${ME.role==='KETUA'?`<button class="s d" data-a=hapusP data-id="${esc(x.id)}">Hapus</button>`:''}</div>`).join('')||'<p class=mut>Belum ada pengumuman.</p>')},
+ async iuran(){const d=await must('iuranSaya');
+  return `<div class=card><h3>Riwayat iuran saya</h3>`+tbl(['Periode','Jumlah','Tanggal','Metode'],d.map(i=>'<tr>'+td(i.periode)+td(rp(i.jumlah))+td(i.tanggalBayar)+td(i.metode)+'</tr>'))+`</div>`},
+ async verif(){const d=await must('menunggu');
+  return `<div class=card><h3>Pendaftaran menunggu</h3><p class=mut>Cocokkan nama, blok, dan nomor rumah dengan data warga sebelum menyetujui.</p>`+tbl(['Nama','Rumah','HP','Aksi'],d.map(x=>'<tr>'+td(x.nama)+td(x.blok+'/'+x.noRumah)+td(x.hp)+`<td><button class=s data-a=verif data-id="${esc(x.id)}" data-y=1>Setujui</button><button class="s d" data-a=verif data-id="${esc(x.id)}" data-y=0>Tolak</button></td></tr>`))+`</div>`},
+ async warga(){const d=await must('warga');
+  return `<div class=card><h3>Data warga</h3>`+tbl(['Nama','Rumah','Peran','Status','Aksi'],d.map(x=>{const a=x.role==='KETUA'?'':
+   (x.status==='AKTIF'?(x.role==='BENDAHARA'?`<button class=s data-a=peran data-id="${esc(x.id)}" data-r=WARGA>Cabut Bendahara</button>`:`<button class=s data-a=peran data-id="${esc(x.id)}" data-r=BENDAHARA>Jadikan Bendahara</button>`):'')+
+   (['AKTIF','NONAKTIF'].includes(x.status)?`<button class="s d" data-a=status data-id="${esc(x.id)}" data-s=${x.status==='AKTIF'?'NONAKTIF':'AKTIF'}>${x.status==='AKTIF'?'Nonaktifkan':'Aktifkan'}</button>`:'')+`<button class=s data-a=reset data-id="${esc(x.id)}">Reset sandi</button>`;
+   return '<tr>'+td(x.nama)+td(x.blok+'/'+x.noRumah)+td(x.role)+td(x.status)+'<td>'+a+'</td></tr>'}))+`</div>`},
+ async uang(){const [r,k,i]=await Promise.all([must('ringkasan',{periode:PER}),must('listKas'),must('listIuran',{periode:PER})]);const b=ME.role==='BENDAHARA';
+  const w=b?await must('wargaAktif'):[];
+  const form=b?`<div class=card><h3>Catat iuran</h3><form data-f=iuran><select name=userId required>${w.map(x=>`<option value="${esc(x.id)}">${esc(x.nama)} (${esc(x.blok)}/${esc(x.noRumah)})</option>`).join('')}</select><div class=g><div><label>Periode</label><input type=month name=periode value="${PER}" required></div><div><label>Jumlah (Rp)</label><input name=jumlah type=number min=1 required></div><div><label>Metode</label><select name=metode><option>Tunai</option><option>Transfer</option></select></div></div><button class=b>Simpan</button></form></div>
+  <div class=card><h3>Catat kas</h3><form data-f=kas><div class=g><div><label>Jenis</label><select name=tipe><option value=MASUK>Masuk</option><option value=KELUAR>Keluar</option></select></div><div><label>Kategori</label><input name=kategori required maxlength=40></div><div><label>Jumlah (Rp)</label><input name=jumlah type=number min=1 required></div></div><input name=keterangan placeholder="Keterangan" required maxlength=200><button class=b>Simpan</button></form><p class=mut>Transaksi tidak bisa dihapus; koreksi dengan transaksi pembalik.</p></div>`:'<p class=mut>Tampilan baca-saja untuk Ketua RT.</p>';
+  return `<div class=card><div class=g><div class=k>Saldo<b>${rp(r.saldo)}</b></div><div class=k>Pemasukan<b>${rp(r.masuk)}</b></div><div class=k>Pengeluaran<b>${rp(r.keluar)}</b></div><div class=k>Iuran ${esc(PER)}<b>${r.sudah}/${r.warga}</b></div></div></div>`+form+
+  `<div class=card><h3>Status iuran</h3><label>Periode</label><input type=month data-a=periode value="${PER}"><b>Sudah bayar</b>`+tbl(['Nama','Jumlah','Tanggal','Metode'],i.sudah.map(x=>'<tr>'+td(x.nama)+td(rp(x.jumlah))+td(x.tanggalBayar)+td(x.metode)+'</tr>'))+`<br><b>Belum bayar</b>`+tbl(['Nama','Rumah'],i.belum.map(x=>'<tr>'+td(x.nama)+td(x.blok+'/'+x.noRumah)+'</tr>'))+`</div>
+  <div class=card><h3>Buku kas</h3>`+tbl(['Tgl','Jenis','Kategori','Jumlah','Ket.'],k.map(x=>'<tr>'+td(x.tanggal)+td(x.tipe)+td(x.kategori)+td(rp(x.jumlah))+td(x.keterangan)+'</tr>'))+`</div>`},
+ async log(){const d=await must('logAktivitas');return `<div class=card><h3>Log aktivitas</h3>`+tbl(['Waktu','Pengguna','Aksi','Detail'],d.map(x=>'<tr>'+td(x.waktu)+td(x.userId)+td(x.aksi)+td(x.detail)+'</tr>'))+`</div>`},
+ async akun(){return `<div class=card><h3>Ubah kata sandi</h3><form data-f=sandi><input type=password name=lama placeholder="Sandi lama" required autocomplete=current-password><input type=password name=baru placeholder="Sandi baru (min. 8, huruf + angka)" required minlength=8 autocomplete=new-password><button class=b>Simpan</button></form></div><button class="s d" data-a=keluar>Keluar</button>`}
+};
+
+/* ---- Aksi & form ---- */
+const ACT={
+ mode:d=>{MODE=d.m;authView()},tab:d=>{TAB=d.t;view()},
+ periode:(d,el)=>{if(el.value){PER=el.value;view()}},
+ keluar:async()=>{await call('logout');keluarLokal()},
+ hapusP:async d=>{if(confirm('Hapus pengumuman ini?'))await kerja('hapusPengumuman',{id:d.id})},
+ verif:async d=>{const c=d.y==='1'?'':(prompt('Alasan penolakan (opsional):')||'');if(d.y==='1'&&!confirm('Setujui warga ini?'))return;await kerja('verifikasi',{id:d.id,setuju:d.y==='1',catatan:c})},
+ peran:async d=>{if(confirm('Ubah peran warga ini?'))await kerja('ubahWarga',{id:d.id,role:d.r})},
+ status:async d=>{if(confirm('Ubah status akun ini?'))await kerja('ubahWarga',{id:d.id,status:d.s})},
+ reset:async d=>{if(!confirm('Reset kata sandi warga ini?'))return;const r=await call('resetSandi',{id:d.id});r.ok?prompt('Sandi sementara (sampaikan langsung ke warga, lalu minta ganti):',r.data):toast(r.error,1)}
+};
+async function kerja(a,p,ok){const r=await call(a,p);r.ok?(toast(ok||r.data),view()):toast(r.error,1);return r}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(b&&b.tagName!=='INPUT'&&ACT[b.dataset.a])ACT[b.dataset.a](b.dataset,b)});
+document.addEventListener('change',e=>{if(e.target.dataset.a==='periode')ACT.periode({},e.target)});
+const FRM={
+ login:async f=>{const r=await call('login',f);if(!r.ok)return toast(r.error,1);T=r.data.token;sessionStorage.setItem('t',T);ME=r.data.profil;TAB='beranda';shell()},
+ daftar:async f=>{const r=await call('register',f);if(!r.ok)return toast(r.error,1);toast(r.data);MODE='masuk';authView()},
+ pengumuman:f=>kerja('tambahPengumuman',f),
+ iuran:f=>kerja('catatIuran',f),kas:f=>kerja('tambahKas',f),
+ sandi:async(f,el)=>{const r=await kerja('ubahSandi',f);if(r.ok)el.reset()}
+};
+document.addEventListener('submit',async e=>{const f=e.target.dataset.f;if(!f)return;e.preventDefault();
+ const btn=e.target.querySelector('.b');btn.disabled=true;try{await FRM[f](Object.fromEntries(new FormData(e.target)),e.target)}finally{btn.disabled=false}});
+async function boot(){if(!T)return authView();const r=await call('me');if(!r.ok){T=null;sessionStorage.removeItem('t');return authView()}ME=r.data;shell()}
+boot();
+</script></body></html>
